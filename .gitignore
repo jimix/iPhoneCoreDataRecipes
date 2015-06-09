@@ -1,0 +1,15 @@
+## Mac HFS?
+.DS_Store
+
+## Xcode
+DerivedData/
+xcuserdata
+*.xcworkspacedata
+*.xccheckout
+
+## CocoaPods
+/Podfile.lock
+/Pods/
+
+## Markdown
+/README.html
