@@ -46,6 +46,8 @@
  
  */
 
+#import <CDTIncrementalStore/CDTIncrementalStore.h>
+
 #import "RecipesAppDelegate.h"
 #import "RecipeListTableViewController.h"
 #import "Recipe.h"
@@ -136,10 +138,101 @@
 }
 
 /**
+ *  This is the replacement "getter" for the persistentStoreCoordinator.
+ */
+- (NSPersistentStoreCoordinator *)persistentStoreCoordinator {
+
+    if (_persistentStoreCoordinator != nil) {
+        return _persistentStoreCoordinator;
+    }
+
+    /**
+     * Check to see if the CDTIncrementalStore actually exists.  The extension is just for clarification.
+     */
+    NSString *documentsStorePath =
+    [[[self applicationDocumentsDirectory] path] stringByAppendingPathComponent:@"Recipes.cdtis"];
+
+    // if the expected store doesn't exist, migrate the default store
+    if (![[NSFileManager defaultManager] fileExistsAtPath:documentsStorePath]) {
+        /**
+         *  The application comes with a pre-populated SQLite database with some recipes.
+         *  The original version of this function would copy this "cooked" database file and
+         *  then add it to the persistent store.  In our new version, we will use Core Data
+         *  to migrate the contents into a Cloudant Sync Data Store via the CDTIncrementalStore.
+         */
+        NSString *defaultStorePath = [[NSBundle mainBundle] pathForResource:@"Recipes" ofType:@"sqlite"];
+        NSURL *defaultStoreURL = [NSURL fileURLWithPath:defaultStorePath];
+
+        /**
+         *  Create an NSPersistentStoreCoordinator for the sole purpose of migrating from SQLite to Cloudant Sync.
+         */
+
+        NSPersistentStoreCoordinator *migrationPSC =
+        [[NSPersistentStoreCoordinator alloc] initWithManagedObjectModel:[self managedObjectModel]];
+
+        NSError *error;
+        NSPersistentStore *defaultStore =
+        [migrationPSC addPersistentStoreWithType:NSSQLiteStoreType
+                                   configuration:nil
+                                             URL:defaultStoreURL
+                                         options:nil
+                                           error:&error];
+        if (!defaultStore) {
+            NSLog(@"Unresolved error %@, %@", error, [error userInfo]);
+            abort();
+        }
+
+        /**
+         *  Note the `withType:[CDTIncrementalStore type]`.  This is a class method that returns
+         *  an NSString that will request that Core Data use CDTIncrementalStore as a backing store.
+         */
+        NSURL *documentsStoreURL = [NSURL fileURLWithPath:documentsStorePath];
+        if (![migrationPSC migratePersistentStore:defaultStore
+                                            toURL:documentsStoreURL
+                                          options:nil
+                                         withType:[CDTIncrementalStore type]
+                                            error:&error]) {
+            NSLog(@"Unresolved error %@, %@", error, [error userInfo]);
+            abort();
+        }
+    }
+
+    /**
+     * At this point, we know our Cloudant Sync Database exists and we create a new 
+     * NSPersistentStoreCoordinator to use it.
+     */
+    _persistentStoreCoordinator =
+    [[NSPersistentStoreCoordinator alloc] initWithManagedObjectModel:[self managedObjectModel]];
+
+
+    // add the default store to our coordinator
+    NSError *error;
+    NSURL *defaultStoreURL = [NSURL fileURLWithPath:documentsStorePath];
+    if (![_persistentStoreCoordinator addPersistentStoreWithType:[CDTIncrementalStore type]
+                                                   configuration:nil
+                                                             URL:defaultStoreURL
+                                                         options:nil
+                                                           error:&error]) {
+        NSLog(@"Unresolved error %@, %@", error, [error userInfo]);
+        abort();
+    }
+
+    /**
+     *  It is important to note that the original code uses two Persistent Stores, one that holds
+     *  the original set and another store for the user's personal recipes.  We skip this step
+     *  for simplicity.
+     */
+
+    return _persistentStoreCoordinator;
+}
+
+
+/**
+ Original Version
  Returns the persistent store coordinator for the application.
  If the coordinator doesn't already exist, it is created and the application's store added to it.
  */
-- (NSPersistentStoreCoordinator *)persistentStoreCoordinator {
+- (NSPersistentStoreCoordinator *)persistentStoreCoordinatorOriginal {
 	
     if (_persistentStoreCoordinator != nil) {
         return _persistentStoreCoordinator;
