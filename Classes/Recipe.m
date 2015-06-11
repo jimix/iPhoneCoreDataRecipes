@@ -59,6 +59,10 @@
 
 @implementation ImageToDataTransformer
 
++ (NSString *)MIMEType {
+    return @"image/png";
+}
+
 + (BOOL)allowsReverseTransformation {
 	return YES;
 }
